@@ -1,5 +1,6 @@
 import asyncio
 import os
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -377,13 +378,31 @@ async def hw_finish(message: Message, state: FSMContext, bot: Bot) -> None:
         "Домашнее задание отправлено репетитору!",
         reply_markup=main_menu_kb(),
     )
+async def start_health_server() -> web.AppRunner:
+    async def health_check(request: web.Request) -> web.Response:
+        return web.Response(text="OK")
+
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    app.router.add_get("/health", health_check)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.getenv("PORT", "10000"))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    return runner
 
 
 async def main() -> None:
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
     dp.include_router(router)
-    await dp.start_polling(bot)
+    runner = await start_health_server()
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await runner.cleanup()
 
 
 if __name__ == "__main__":
